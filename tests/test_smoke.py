@@ -38,8 +38,15 @@ def test_window_flow():
         == "窗内"
     )
     assert c.post("/api/windows/2/materialize", headers=h).status_code == 409
-    assert c.post("/api/windows/2/close", headers=h).status_code == 200
-    assert c.post("/api/windows/2/materialize", headers=h).status_code == 200
+    r = c.post("/api/windows/2/close", headers=h)
+    assert r.status_code == 200
+    seal = r.json()["seal_token"]
+    assert (
+        c.post(
+            "/api/windows/2/materialize", headers=h, json={"seal_token": seal}
+        ).status_code
+        == 200
+    )
     assert c.get("/api/reconcile/2", headers=h).json()["aligned"] is True
 
 

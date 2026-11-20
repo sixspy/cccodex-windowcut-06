@@ -38,6 +38,8 @@ def reconcile(wid: int, authorization: AuthHeader = None):
             and mat["row_count"] == ev["c"]
             and abs(mat["total_amount"] - ev["s"]) < 1e-6
         )
+        seal_aligned = bool(mat) and mat["seal_token"] == w["seal_token"]
+        aligned = aligned and seal_aligned
         return {
             "window": dict(w),
             "window_events": ev["c"],
@@ -45,6 +47,9 @@ def reconcile(wid: int, authorization: AuthHeader = None):
             "materialized": dict(mat) if mat else None,
             "late_bucket": late,
             "rejects": rejects,
+            "seal_token": w["seal_token"],
+            "mat_seal_token": mat["seal_token"] if mat else None,
+            "seal_aligned": seal_aligned,
             "aligned": aligned,
         }
 
@@ -53,7 +58,9 @@ def reconcile(wid: int, authorization: AuthHeader = None):
 def reconcile_all(authorization: AuthHeader = None):
     require_user(authorization)
     with connect() as conn:
-        windows = conn.execute("SELECT id,name,status FROM windows ORDER BY id").fetchall()
+        windows = conn.execute(
+            "SELECT id,name,status,seal_token FROM windows ORDER BY id"
+        ).fetchall()
         items = []
         for w in windows:
             ev = conn.execute(
@@ -74,12 +81,15 @@ def reconcile_all(authorization: AuthHeader = None):
                 and mat["row_count"] == ev["c"]
                 and abs(mat["total_amount"] - ev["s"]) < 1e-6
             )
+            seal_aligned = bool(mat) and mat["seal_token"] == w["seal_token"]
+            aligned = aligned and seal_aligned
             items.append(
                 {
                     "window_id": w["id"],
                     "name": w["name"],
                     "status": w["status"],
                     "aligned": aligned,
+                    "seal_aligned": seal_aligned,
                     "window_events": ev["c"],
                     "late_bucket": late,
                 }

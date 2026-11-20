@@ -4,7 +4,7 @@ export const materializeViewTemplate = `
   <p class="muted">分区失败策略为空桩（整窗回滚 vs 保留成功分区）。</p>
   <button class="ghost" @click="partitionStub">登记分区空桩</button>
   <table>
-    <thead><tr><th>窗口</th><th>状态</th><th>行数</th><th>金额</th><th>分区</th><th>时间</th></tr></thead>
+    <thead><tr><th>窗口</th><th>状态</th><th>行数</th><th>金额</th><th>分区</th><th>印记</th><th>时间</th></tr></thead>
     <tbody>
       <tr v-for="m in mats" :key="m.id">
         <td>{{m.window_name}}</td>
@@ -12,6 +12,7 @@ export const materializeViewTemplate = `
         <td>{{m.row_count}}</td>
         <td>{{m.total_amount}}</td>
         <td>{{m.partition_key}}</td>
+        <td :title="m.seal_token">{{m.seal_token||'—'}}</td>
         <td>{{m.created_at}}</td>
       </tr>
     </tbody>

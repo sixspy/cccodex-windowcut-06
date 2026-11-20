@@ -138,7 +138,10 @@ createApp({
 
     async function materialize(id) {
       actionErr.value = "";
-      const r = await api.post("/api/windows/" + id + "/materialize", {});
+      const w = windows.value.find((x) => x.id === id);
+      const r = await api.post("/api/windows/" + id + "/materialize", {
+        seal_token: w ? w.seal_token : null,
+      });
       if (r && !r.ok) actionErr.value = r.body.detail || "失败";
       await refresh();
     }

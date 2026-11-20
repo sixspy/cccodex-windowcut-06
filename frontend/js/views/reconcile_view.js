@@ -6,14 +6,19 @@ export const reconcileViewTemplate = `
     迟到桶 {{recon.late_bucket}} · 拒收 {{recon.rejects}} ·
     对齐 <b :class="recon.aligned?'ok':'late'">{{recon.aligned}}</b>
   </p>
+  <p class="muted">
+    窗口印记 {{recon.seal_token||'—'}} · 台账印记 {{recon.mat_seal_token||'—'}} ·
+    印记对齐 <b :class="recon.seal_aligned?'ok':'late'">{{recon.seal_aligned}}</b>
+  </p>
   <table>
-    <thead><tr><th>窗口</th><th>状态</th><th>窗内笔数</th><th>迟到</th><th>对齐</th></tr></thead>
+    <thead><tr><th>窗口</th><th>状态</th><th>窗内笔数</th><th>迟到</th><th>印记对齐</th><th>对齐</th></tr></thead>
     <tbody>
       <tr v-for="r in reconAll" :key="r.window_id">
         <td>{{r.name}}</td>
         <td>{{r.status}}</td>
         <td>{{r.window_events}}</td>
         <td>{{r.late_bucket}}</td>
+        <td :class="r.seal_aligned?'ok':'late'">{{r.seal_aligned}}</td>
         <td :class="r.aligned?'ok':'late'">{{r.aligned}}</td>
       </tr>
     </tbody>

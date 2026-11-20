@@ -45,6 +45,7 @@ def close_window(wid: int, authorization: AuthHeader = None):
     lock_key = f"window:{wid}"
     with connect() as conn:
         require_lock(conn, lock_key, user)
+        conn.commit()  # 窗锁落定，他人可见
         try:
             w = conn.execute("SELECT * FROM windows WHERE id=?", (wid,)).fetchone()
             if not w:

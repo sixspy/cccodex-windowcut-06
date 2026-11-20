@@ -31,3 +31,4 @@ class ReopenIn(BaseModel):
 class MaterializeIn(BaseModel):
     partition_key: str | None = None
     fail_simulate: bool = False
+    seal_token: str | None = None  # 本窗最新封口印记：甲路径门禁必核

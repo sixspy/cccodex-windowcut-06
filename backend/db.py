@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +11,11 @@ DATA = ROOT / "data"
 DB_PATH = DATA / "app.db"
 FIXTURES = ROOT / "fixtures"
 FRONTEND = ROOT / "frontend"
+
+# 正确性口径择一落定：甲路径＝印记门禁拒绝（未带匹配 seal_token 整笔拒，
+# 带对与台账行同库提交）。落 seal_registry 册，当天禁止改口；偏离册拒写并记「印记偏了」。
+SEAL_PATH = "甲"
+SEAL_PATH_NOTE = "印记门禁拒绝"
 
 PRODUCT_META = {
     "modules": [
@@ -83,6 +89,13 @@ CREATE TABLE IF NOT EXISTS materializations(
   row_count INTEGER NOT NULL,
   total_amount REAL NOT NULL,
   partition_key TEXT,
+  seal_token TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS seal_registry(
+  id INTEGER PRIMARY KEY CHECK (id=1),
+  path TEXT NOT NULL,
+  decided_on TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS hold_staging(
@@ -250,11 +263,30 @@ def seed_if_empty(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """老库文件继续挂：缺列补列，不重建不丢行。"""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(materializations)")}
+    if "seal_token" not in cols:
+        conn.execute("ALTER TABLE materializations ADD COLUMN seal_token TEXT")
+
+
+def ensure_seal_registry(conn: sqlite3.Connection) -> None:
+    """封口印记册：选定甲路径落册一次；已落册则不翻动（当天禁止改口）。"""
+    if conn.execute("SELECT id FROM seal_registry WHERE id=1").fetchone() is None:
+        now = datetime.now().isoformat(timespec="seconds")
+        conn.execute(
+            "INSERT INTO seal_registry(id,path,decided_on,created_at) VALUES (1,?,?,?)",
+            (SEAL_PATH, date.today().isoformat(), now),
+        )
+
+
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         ensure_users(conn)
         seed_if_empty(conn)
+        ensure_seal_registry(conn)
         conn.commit()
 
 

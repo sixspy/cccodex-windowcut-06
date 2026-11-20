@@ -1,6 +1,7 @@
 """窗口锁与争用登记（公共并发面，题面争用句应对得上）。"""
 from __future__ import annotations
 
+import sqlite3
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
@@ -17,24 +18,46 @@ class LockIn(BaseModel):
     action: str = "acquire"
 
 
+def _contention(conn, lock_key: str, holder: str, holder_now: str, now: str) -> None:
+    conn.execute(
+        """INSERT INTO contention_log(lock_key,actor,action,detail,created_at)
+           VALUES (?,?,?,?,?)""",
+        (lock_key, holder, "争用", f"持有者={holder_now}", now),
+    )
+
+
 def try_acquire(conn, lock_key: str, holder: str) -> bool:
+    """占锁原子化：INSERT 先行；busy_timeout 压 0，撞锁即判争用。
+
+    锁行须由调用方及时 commit 方对他人可见。撞已提交锁行（主键冲突）或
+    撞持锁方未放行的写锁（database is locked）都立即判争用——后到者
+    只记争用，绝不等锁滑行进入临界区。
+
+    注意：失败语句的残留事务会持锁（RESERVED/SHARED）碍了持锁方的提交，
+    故失败路径先 rollback 清场再查持有者、记争用——try_acquire 须为
+    调用方连接上的首个写操作。
+    """
     now = datetime.now().isoformat(timespec="seconds")
-    row = conn.execute(
-        "SELECT holder FROM window_locks WHERE lock_key=?", (lock_key,)
-    ).fetchone()
-    if row is None:
+    conn.execute("PRAGMA busy_timeout=0")
+    try:
         conn.execute(
             "INSERT INTO window_locks(lock_key,holder,acquired_at) VALUES (?,?,?)",
             (lock_key, holder, now),
         )
+        acquired = True
+    except (sqlite3.IntegrityError, sqlite3.OperationalError):
+        acquired = False
+    finally:
+        conn.execute("PRAGMA busy_timeout=30000")
+    if acquired:
         return True
-    if row["holder"] == holder:
+    conn.rollback()  # 清掉失败语句的残留事务，避免自持锁与持锁方互等成死锁
+    row = conn.execute(
+        "SELECT holder FROM window_locks WHERE lock_key=?", (lock_key,)
+    ).fetchone()
+    if row is not None and row["holder"] == holder:
         return True
-    conn.execute(
-        """INSERT INTO contention_log(lock_key,actor,action,detail,created_at)
-           VALUES (?,?,?,?,?)""",
-        (lock_key, holder, "争用", f"持有者={row['holder']}", now),
-    )
+    _contention(conn, lock_key, holder, row["holder"] if row else "未知", now)
     return False
 
 
@@ -47,6 +70,7 @@ def release(conn, lock_key: str, holder: str) -> None:
 
 def require_lock(conn, lock_key: str, holder: str) -> None:
     if not try_acquire(conn, lock_key, holder):
+        conn.commit()  # 争用登记落库：后到只记争用，不写业务
         raise HTTPException(409, "争用：后到只记争用，不写业务")
 
 
